@@ -1,6 +1,6 @@
 # Bookstore Application
 
-This is a full-stack Bookstore application built using **Node.js**, **Express**, **PostgreSQL**, and **bcrypt** for password hashing. The project includes features such as user authentication and book management.
+This is a backend Bookstore application built using **Node.js**, **Express**, **PostgreSQL**, and **bcrypt** for password hashing. The project includes features such as user authentication and book management.
 
 ## Features
 
@@ -103,8 +103,7 @@ This is a full-stack Bookstore application built using **Node.js**, **Express**,
     {
       "title": "Book Title",
       "author": "Author Name",
-      "genre": "Genre",
-      "image_url": "http://example.com/cover.jpg"
+      "genre": "Genre"
     }
     ```
   - Response: `201 Created`
