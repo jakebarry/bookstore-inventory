@@ -1,7 +1,9 @@
 const express = require('express');
 const app = express();
 const port = 3000;
-const pool = require('./db')
+const pool = require('./db');
+const bcrypt = require('bcrypt');
+const jwt = require('jsonwebtoken');
 
 app.use(express.json());
 
@@ -21,6 +23,17 @@ app.get('/books', async (req, res) => {
     } catch (err) {
         console.error(err.message);
         res.status(500).send('Server Error: Error getting books.');
+    }
+});
+
+// GET all users in database
+app.get('/register', async (req, res) => {
+    try {
+        const result = await pool.query('SELECT * FROM users ORDER BY id ASC');
+        res.json(result.rows);
+    } catch (err) {
+        console.error(err.message);
+        res.status(500).send('Server Error: Error getting users.');
     }
 });
 
@@ -52,6 +65,27 @@ app.post('/books', async (req, res) => {
     } catch (err) {
         console.error(err.message);
         res.status(500).send('Server Error: Error creating book.')
+    }
+});
+
+// Add a user
+app.post('/register', async (req, res) => {
+    try {
+        const { email, password } = req.body;
+
+        // Check if email and password are provided
+        if (!email || !password) {
+            return res.status(400).json({ error: 'Email and password are required' });
+        }
+
+        const hashedPassword = await bcrypt.hash(password, 10);
+        const result = await pool.query(
+            'INSERT INTO users (email, password) VALUES ($1, $2)', [email, hashedPassword]
+        );
+        res.status(201).send('User created')
+    } catch (err) {
+        console.error(err.message);
+        res.status(500).send('Server Error: Error creating user.')
     }
 });
 
@@ -95,7 +129,6 @@ app.delete('/books/:id', async (req, res) => {
 });
 
 // PATCH an existing book with some parameters by its ID
-
 app.patch('/books/:id', async (req, res) => {
     const { id } = req.params;
     const { title, author, genre, price, stock } = req.body;
@@ -145,7 +178,7 @@ app.patch('/books/:id', async (req, res) => {
             return res.status(404).json({ error: 'Book not found' });
         }
 
-        // Return the updated task
+        // Return the updated book
         res.status(200).json(result.rows[0]);
     } catch (error) {
         console.error(error);
