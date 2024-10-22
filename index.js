@@ -4,8 +4,29 @@ const port = 3000;
 const pool = require('./db');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
+require('dotenv').config();
 
 app.use(express.json());
+
+// Middleware to authenticate the token
+const authenticateToken = (req, res, next) => {
+    const token = req.header('Authorization') && req.header('Authorization').split(' ')[1];
+    // console.log("Token received:", token);
+
+    if (!token) {
+        return res.status(403).json({ error: 'Access denied. No token provided.' });
+    }
+
+    try {
+        const decoded = jwt.verify(token, process.env.JWT_SECRET);
+        req.user = decoded;
+        // Executre next middleware in pipeline
+        next();
+    } catch (err) {
+        console.error("JWT verification failed:", err.message);
+        res.status(401).json({ error: 'Invalid token.' });
+    }
+}
 
 app.get('/', (req, res) => {
     res.send('Welcome to the Bookstore Inventory Management System!');
@@ -53,20 +74,29 @@ app.get('/books/:id', async (req, res) => {
         res.status(500).send('Server Error: Cannot find specific book')
     }
 });
-
-// Add a book
-app.post('/books', async (req, res) => {
+// Add a new book (Protected Route)
+app.post('/books', authenticateToken, async (req, res) => {
     try {
         const { title, author, genre, price, stock } = req.body;
+
         const result = await pool.query(
-            'INSERT INTO books (title, author, genre, price, stock) VALUES ($1, $2, $3, $4, $5) RETURNING *', [title, author, genre, price, stock]
+            'INSERT INTO books (title, author, genre, price, stock) VALUES ($1, $2, $3, $4, $5) RETURNING *',
+            [title, author, genre, price, stock]
         );
-        res.status(201).json(result.rows[0]);
+
+        // Return the newly added book with a 201 status code
+        const newBook = result.rows[0];
+        res.status(201).json({
+            message: 'Book added successfully!',
+            book: newBook
+        });
+
     } catch (err) {
         console.error(err.message);
-        res.status(500).send('Server Error: Error creating book.')
+        res.status(500).json({ error: 'Server error while adding the book.' });
     }
 });
+
 
 // Add a user
 app.post('/register', async (req, res) => {
@@ -85,7 +115,37 @@ app.post('/register', async (req, res) => {
         res.status(201).send('User created')
     } catch (err) {
         console.error(err.message);
-        res.status(500).send('Server Error: Error creating user.')
+        res.status(500).send('Server Error: Error creating user')
+    }
+});
+
+// Login route
+app.post('/login', async (req, res) => {
+    try {
+        const { email, password } = req.body;
+
+        // Check if user exists
+        const result = await pool.query('SELECT * FROM users WHERE email = $1', [email]);
+        if (result.rows.length === 0) {
+            return res.status(400).json({ error: 'Invalid email or password' });
+        }
+
+        const user = result.rows[0];
+
+        // Compare the provided password with the hashed password in the database
+        const validPassword = await bcrypt.compare(password, user.password);
+        if (!validPassword) {
+            return res.status(400).json({ error: 'Invalid email or password' });
+        }
+
+        // Generate JWT
+        const token = jwt.sign({ userId: user.id }, process.env.JWT_SECRET, { expiresIn: '1h' });
+
+        // Send token
+        res.json({ token });
+    } catch (err) {
+        console.error(err.message);
+        res.status(500).json({ error: 'Server error during login' });
     }
 });
 
