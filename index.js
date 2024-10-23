@@ -36,17 +36,6 @@ app.listen(port, () => {
     console.log(`Server is running on http://localhost:${port}`);
 });
 
-// GET all books in database
-app.get('/books', async (req, res) => {
-    try {
-        const result = await pool.query('SELECT * FROM books ORDER BY id ASC');
-        res.json(result.rows);
-    } catch (err) {
-        console.error(err.message);
-        res.status(500).send('Server Error: Error getting books.');
-    }
-});
-
 // GET all users in database
 app.get('/register', async (req, res) => {
     try {
@@ -74,6 +63,80 @@ app.get('/books/:id', async (req, res) => {
         res.status(500).send('Server Error: Cannot find specific book')
     }
 });
+
+// Search and filter books
+app.get('/books', async (req, res) => {
+    try {
+        const { title, author, genre, minPrice, maxPrice, minStock, maxStock, page, limit } = req.query;
+
+        // Set up pagination (default values if not provided)
+        const currentPage = page ? parseInt(page) : 1;
+        const pageSize = limit ? parseInt(limit) : 10; // default 10 items per page
+        const offset = (currentPage - 1) * pageSize;
+
+        // Start building the SQL query dynamically
+        let query = 'SELECT * FROM books WHERE 1=1'; // `1=1` is a trick to append conditions easily
+
+        const values = [];
+
+        // Apply filters dynamically based on query parameters
+        if (title) {
+            query += ` AND LOWER(title) LIKE LOWER($${values.length + 1})`;
+            values.push(`%${title}%`);
+        }
+
+        if (author) {
+            query += ` AND LOWER(author) LIKE LOWER($${values.length + 1})`;
+            values.push(`%${author}%`);
+        }
+
+        if (genre) {
+            query += ` AND LOWER(genre) LIKE LOWER($${values.length + 1})`;
+            values.push(`%${genre}%`);
+        }
+
+        if (minPrice) {
+            query += ` AND price >= $${values.length + 1}`;
+            values.push(minPrice);
+        }
+
+        if (maxPrice) {
+            query += ` AND price <= $${values.length + 1}`;
+            values.push(maxPrice);
+        }
+
+        if (minStock) {
+            query += ` AND stock >= $${values.length + 1}`;
+            values.push(minStock);
+        }
+
+        if (maxStock) {
+            query += ` AND stock <= $${values.length + 1}`;
+            values.push(maxStock);
+        }
+
+        // Add pagination to the query
+        query += ` LIMIT $${values.length + 1} OFFSET $${values.length + 2}`;
+        values.push(pageSize, offset);
+
+        // Execute the query
+        const result = await pool.query(query, values);
+
+        // Send paginated results
+        res.json({
+            page: currentPage,
+            limit: pageSize,
+            total: result.rowCount,
+            books: result.rows
+        });
+
+    } catch (err) {
+        console.error(err.message);
+        res.status(500).json({ error: 'Server error while searching for books.' });
+    }
+});
+
+
 // Add a new book (Protected Route)
 app.post('/books', authenticateToken, async (req, res) => {
     try {
